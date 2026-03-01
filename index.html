@@ -168,13 +168,16 @@ function decodeSDP(str) {
   return JSON.parse(json);
 }
 
-// ====================== WORLD SEED — FULL DUEL STATE ======================
+// ====================== WORLD SEED — FULL DUEL SNAPSHOT ======================
 function generateWorldSeed() {
+  const isHost = myRole === 'host';
   const state = {
-    x: myPos.x,
-    y: myPos.y,
-    mh: myHealth,
-    oh: otherHealth,          // both HPs now saved
+    hx: isHost ? myPos.x : (otherPos ? otherPos.x : 8),
+    hy: isHost ? myPos.y : (otherPos ? otherPos.y : 8),
+    jx: isHost ? (otherPos ? otherPos.x : 8) : myPos.x,
+    jy: isHost ? (otherPos ? otherPos.y : 8) : myPos.y,
+    hh: isHost ? myHealth : otherHealth,
+    jh: isHost ? otherHealth : myHealth,
     inv: inventory.map(i => i.name).join('|')
   };
   let jsonStr = JSON.stringify(state);
@@ -216,13 +219,23 @@ function loadSeed() {
     while (b64.length % 4) b64 += '=';
     const state = JSON.parse(atob(b64));
     
-    myPos = {x: state.x || 8, y: state.y || 8};
-    myHealth = Math.max(0, state.mh || 10);
-    otherHealth = Math.max(0, state.oh || 10);
+    // Map based on YOUR role
+    if (myRole === 'host') {
+      myPos = {x: state.hx || 8, y: state.hy || 8};
+      otherPos = {x: state.jx || 8, y: state.jy || 8};
+      myHealth = Math.max(0, state.hh || 10);
+      otherHealth = Math.max(0, state.jh || 10);
+    } else {
+      myPos = {x: state.jx || 8, y: state.jy || 8};
+      otherPos = {x: state.hx || 8, y: state.hy || 8};
+      myHealth = Math.max(0, state.jh || 10);
+      otherHealth = Math.max(0, state.hh || 10);
+    }
+    
     inventory = (state.inv || '').split('|').filter(Boolean).map(name => ({type:'badge', name}));
     
     sendMyState();
-    battleLog('FULL DUEL RESTORED ✓ (both HPs + badges)');
+    battleLog('FULL DUEL RESTORED ✓ (both positions + HP + badges)');
     draw();
   } catch(e) {
     console.error(e);
@@ -242,7 +255,7 @@ function sendMyState() {
   }
 }
 
-// ====================== WEBRTC ======================
+// ====================== WEBRTC (unchanged) ======================
 function setupWebRTC() {
   pc = new RTCPeerConnection({
     iceServers: [{urls: 'stun:stun.l.google.com:19302'}, {urls: 'stun:stun1.l.google.com:19302'}]
@@ -320,7 +333,7 @@ async function startRole(role) {
   otherLetter = role === 'host' ? 'J' : 'H';
   otherColor = role === 'host' ? '#0f0' : '#ff8c00';
 
-  myHealth = 10; otherHealth = 10; inventory = [];
+  myHealth = 10; otherHealth = 10; inventory = []; otherPos = null;
 
   document.getElementById('start').style.display = 'none';
   document.getElementById('signaling').style.display = 'block';
