@@ -11,7 +11,7 @@
   canvas { image-rendering:pixelated; border:8px solid #0f0; background:#001100; margin:10px auto; display:block; max-width:95vw; max-height:60vh; }
   button { font-size:28px; padding:12px 24px; margin:4px; background:#111; color:#0f0; border:4px solid #0f0; }
   #status, #seedDisplay { font-size:19px; margin:6px; min-height:28px; }
-  textarea { width:92%; height:65px; background:#001100; color:#0f0; font-family:monospace; font-size:15px; margin:6px auto; display:block; line-height:1.3; }
+  textarea { width:92%; height:65px; background:#001100; color:#0f0; font-family:monospace; font-size:15px; margin:6px auto; display:block; line-height:1.3; white-space:pre; overflow-x:auto; }
   .copybtn { font-size:18px; padding:6px 14px; margin:4px; }
   input { font-size:24px; padding:10px; background:#001100; color:#0f0; border:4px solid #0f0; width:70%; text-align:center; }
   .step { background:#001100; border:4px solid #0f0; padding:8px; margin:6px auto; max-width:520px; text-align:left; font-size:17px; }
@@ -144,6 +144,11 @@ function battleLog(msg) {
   logEl.scrollTop = 0;
 }
 
+// ====================== CLEAN PASTE HELPER ======================
+function cleanPaste(str) {
+  return str.trim().replace(/\s+/g, '');   // remove ALL whitespace (spaces, tabs, newlines, etc.)
+}
+
 // ====================== SIMPLE SDP ======================
 function encodeSDP(desc) {
   const json = JSON.stringify({type: desc.type, sdp: desc.sdp});
@@ -151,8 +156,8 @@ function encodeSDP(desc) {
   return b64.match(/.{1,40}/g).join(' ');
 }
 function decodeSDP(str) {
-  const b64 = str.replace(/\s/g, '');
-  const json = atob(b64);
+  const clean = cleanPaste(str);
+  const json = atob(clean);
   return JSON.parse(json);
 }
 
@@ -171,8 +176,8 @@ function copySeed() {
 function showLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'block'; }
 function hideLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'none'; }
 function loadSeed() {
-  let raw = document.getElementById('loadSeedInput').value.trim();
-  let input = raw.replace(/\s+/g, ''); // remove ALL whitespace
+  let raw = document.getElementById('loadSeedInput').value;
+  let input = cleanPaste(raw);
   hideLoadSeed();
   if (!input) return;
   try {
@@ -307,9 +312,26 @@ function copySDP() {
   navigator.clipboard.writeText(txt).then(() => battleLog('CODE COPIED'));
 }
 
+// ====================== REAL-TIME PASTE CLEANING ======================
+function setupPasteCleaning() {
+  const sdpField = document.getElementById('remoteSDP');
+  const seedField = document.getElementById('loadSeedInput');
+
+  function cleanField(field) {
+    let raw = field.value;
+    let clean = raw.trim().replace(/\s+/g, '');
+    if (clean !== raw) field.value = clean;
+  }
+
+  sdpField.addEventListener('paste', () => setTimeout(() => cleanField(sdpField), 10));
+  sdpField.addEventListener('input', () => cleanField(sdpField));
+
+  seedField.addEventListener('paste', () => setTimeout(() => cleanField(seedField), 10));
+  seedField.addEventListener('input', () => cleanField(seedField));
+}
+
 async function connect() {
-  let raw = document.getElementById('remoteSDP').value;
-  let input = raw.trim().replace(/\s+/g, ''); // ← AGGRESSIVE CLEANUP (all spaces, newlines, tabs removed)
+  let input = document.getElementById('remoteSDP').value; // already cleaned by real-time listener
   if (!input) return battleLog('PASTE CODE FIRST');
 
   try {
@@ -399,6 +421,29 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') move(0,1);
   if (e.key === ' ' || e.key === 'Enter') slash();
 });
+
+// Setup real-time cleaning when the page loads
+window.onload = () => {
+  setupPasteCleaning();   // defined below
+};
+
+// Real-time paste cleaning function
+function setupPasteCleaning() {
+  const sdpField = document.getElementById('remoteSDP');
+  const seedField = document.getElementById('loadSeedInput');
+
+  const clean = (field) => {
+    let raw = field.value;
+    let cleaned = raw.trim().replace(/\s+/g, '');
+    if (cleaned !== raw) field.value = cleaned;
+  };
+
+  sdpField.addEventListener('paste', () => setTimeout(() => clean(sdpField), 5));
+  sdpField.addEventListener('input', () => clean(sdpField));
+
+  seedField.addEventListener('paste', () => setTimeout(() => clean(seedField), 5));
+  seedField.addEventListener('input', () => clean(seedField));
+}
 </script>
 </body>
 </html>
