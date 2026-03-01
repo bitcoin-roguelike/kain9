@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KAIN9 • 16×16</title>
+<style>
+  body { margin:0; background:#000; color:#0f0; font-family:monospace; text-align:center; }
+  canvas { image-rendering:pixelated; border:8px solid #0f0; background:#001100; margin:20px; }
+  button { font-size:24px; padding:12px 24px; margin:8px; background:#111; color:#0f0; border:3px solid #0f0; }
+  #status { font-size:18px; margin:15px; min-height:28px; }
+</style>
+</head>
+<body>
+<h1>KAIN9 — 16×16</h1>
+<div id="start">
+  <button onclick="startRole('host')">I AM HOST (Green H)</button><br><br>
+  <button onclick="startRole('joiner')">I AM JOINER (Red J)</button>
+</div>
+
+<div id="game" style="display:none">
+  <div id="status">Kain9 online • Waiting for second player...</div>
+  <canvas id="c" width="480" height="480"></canvas><br>
+  <button onclick="move(-1,0)">←</button>
+  <button onclick="move(0,-1)">↑</button>
+  <button onclick="move(0,1)">↓</button>
+  <button onclick="move(1,0)">→</button>
+  <button onclick="slash()" style="margin-left:30px">SLASH</button>
+</div>
+
+<script>
+// ====================== KAIN9 CORE ======================
+const SIZE = 16;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let myRole = null;
+let myBaseSig = '';           // unique fingerprint
+let otherBaseSig = '';        // known from imprint (local sim)
+let myPos = {x:8, y:8};
+let otherPos = null;
+let tick = 0;
+let isLocalSim = false;        // true = local testing, false = real timing on GitHub
+
+// Probe files (00 to 15)
+const PROBE_COUNT = 16;
+const PROBES = Array.from({length: PROBE_COUNT}, (_,i) => `probe-${i.toString().padStart(2,'0')}.bin`);
+
+// Simple deterministic "Kain9" fingerprint (good enough for local + real use)
+async function computeKain9Sig() {
+  const ua = navigator.userAgent;
+  const w = screen.width, h = screen.height;
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+  const lang = navigator.language;
+
+  // Tiny canvas + audio hash
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx2 = c.getContext('2d');
+  ctx2.fillStyle = '#f00';
+  ctx2.fillRect(0,0,32,32);
+  const data = ctx2.getImageData(0,0,32,32).data.join('');
+  
+  const sig = (ua + w + h + cores + mem + lang + data).split('').reduce((a,c,i) => a + c.charCodeAt(0) * (i+1), 0);
+  return (sig % 999999999).toString(36).toUpperCase().padStart(8,'0');
+}
+
+// Golden ratio spiral deviation (our leaf pattern)
+const PHI = (1 + Math.sqrt(5)) / 2;
+function goldenSpiralDeviation(x, y, t) {
+  const n = x + y * SIZE;
+  return Math.sin(n * PHI + t * 0.1) * 0.0001 + (n % 16) / 1000;
+}
+
+// Position → probe pair (0-255 → two probes 0-15)
+function posToProbePair(pos) {
+  const n = pos.x + pos.y * SIZE;
+  return [n % 16, Math.floor(n / 16) % 16];
+}
+
+// ====================== ROLE SETUP ======================
+async function startRole(role) {
+  myRole = role;
+  myBaseSig = await computeKain9Sig();
+  
+  document.getElementById('start').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+  document.getElementById('status').innerHTML = `Kain9 online • You are ${role.toUpperCase()}`;
+
+  // Local simulation: the other player "imprints" instantly
+  otherBaseSig = myRole === 'host' ? 'JOINER-TEST-SIG' : 'HOST-TEST-SIG';
+
+  setInterval(gameTick, 120);
+  requestAnimationFrame(draw);
+}
+
+// ====================== MOVE & SIGNAL ======================
+function move(dx, dy) {
+  myPos.x = Math.max(0, Math.min(SIZE-1, myPos.x + dx));
+  myPos.y = Math.max(0, Math.min(SIZE-1, myPos.y + dy));
+  
+  // Warm the two probes for this position
+  const [p1, p2] = posToProbePair(myPos);
+  warmProbe(p1);
+  warmProbe(p2);
+  
+  draw();
+}
+
+function warmProbe(probeIndex) {
+  if (isLocalSim) return; // simulated locally
+  fetch(PROBES[probeIndex] + '?t=' + Date.now(), {cache: 'no-store'});
+}
+
+// Slash demo
+function slash() {
+  if (otherPos && Math.abs(myPos.x - otherPos.x) <= 1 && Math.abs(myPos.y - otherPos.y) <= 1) {
+    alert('SLASH HIT!');
+  }
+}
+
+// ====================== LISTENER & DECODE ======================
+function gameTick() {
+  tick++;
+  
+  if (isLocalSim) {
+    // Simulate the other player moving randomly for testing
+    if (Math.random() < 0.1) {
+      otherPos = {x: Math.floor(Math.random()*SIZE), y: Math.floor(Math.random()*SIZE)};
+    }
+  } else {
+    // Real timing decode will go here later
+  }
+  
+  draw();
+}
+
+// ====================== RENDER ======================
+function draw() {
+  ctx.fillStyle = '#001100';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  
+  // Grid
+  ctx.strokeStyle = '#003300';
+  for (let i = 0; i <= SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i*30, 0); ctx.lineTo(i*30, 480);
+    ctx.moveTo(0, i*30); ctx.lineTo(480, i*30);
+    ctx.stroke();
+  }
+  
+  // Host (Green H)
+  ctx.fillStyle = '#0f0';
+  ctx.font = 'bold 32px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('H', myPos.x*30 + 15, myPos.y*30 + 15);
+  
+  // Joiner (Red J)
+  if (otherPos) {
+    ctx.fillStyle = '#f00';
+    ctx.fillText('J', otherPos.x*30 + 15, otherPos.y*30 + 15);
+  }
+  
+  // Debug info
+  document.getElementById('status').innerHTML = 
+    `Tick: ${tick} | My pos: (${myPos.x},${myPos.y}) | Other: ${otherPos ? `(${otherPos.x},${otherPos.y})` : '??'}`;
+}
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  if (!myRole) return;
+  if (e.key === 'ArrowLeft'  || e.key === 'a') move(-1,0);
+  if (e.key === 'ArrowRight' || e.key === 'd') move(1,0);
+  if (e.key === 'ArrowUp'    || e.key === 'w') move(0,-1);
+  if (e.key === 'ArrowDown'  || e.key === 's') move(0,1);
+  if (e.key === ' ') slash();
+});
+</script>
+</body>
+</html>
