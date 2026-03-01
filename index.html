@@ -107,7 +107,7 @@
   <div style="max-width:520px; margin:0 auto; background:#001100; border:6px solid #0f0; padding:20px;">
     <h3>PASTE WORLD SAVE SEED</h3>
     <textarea id="loadSeedInput" style="height:120px; width:100%;" spellcheck="false" autocorrect="off" autocapitalize="none" placeholder="K9eyJ4Ijo4LCJ5Ijo4..."></textarea><br><br>
-    <button onclick="loadSeed()">LOAD & RESTORE</button>
+    <button onclick="loadSeed()">LOAD & RESTORE FULL DUEL</button>
     <button onclick="hideLoadSeed()" style="background:#330;">CANCEL</button>
   </div>
 </div>
@@ -168,12 +168,13 @@ function decodeSDP(str) {
   return JSON.parse(json);
 }
 
-// ====================== RELIABLE WORLD SEED (HP fix) ======================
+// ====================== WORLD SEED — FULL DUEL STATE ======================
 function generateWorldSeed() {
   const state = {
     x: myPos.x,
     y: myPos.y,
-    mh: myHealth,        // only YOUR health
+    mh: myHealth,
+    oh: otherHealth,          // both HPs now saved
     inv: inventory.map(i => i.name).join('|')
   };
   let jsonStr = JSON.stringify(state);
@@ -187,7 +188,7 @@ function generateWorldSeed() {
 }
 
 function copySeed() {
-  navigator.clipboard.writeText(generateWorldSeed()).then(() => battleLog('WORLD SEED COPIED'));
+  navigator.clipboard.writeText(generateWorldSeed()).then(() => battleLog('WORLD SEED COPIED — send to friend'));
 }
 
 function showLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'block'; }
@@ -216,12 +217,12 @@ function loadSeed() {
     const state = JSON.parse(atob(b64));
     
     myPos = {x: state.x || 8, y: state.y || 8};
-    if (typeof state.mh === 'number') myHealth = Math.max(0, state.mh); // only restore YOUR HP
-    
+    myHealth = Math.max(0, state.mh || 10);
+    otherHealth = Math.max(0, state.oh || 10);
     inventory = (state.inv || '').split('|').filter(Boolean).map(name => ({type:'badge', name}));
     
     sendMyState();
-    battleLog('WORLD RESTORED SUCCESSFULLY ✓ (your HP preserved)');
+    battleLog('FULL DUEL RESTORED ✓ (both HPs + badges)');
     draw();
   } catch(e) {
     console.error(e);
@@ -241,7 +242,7 @@ function sendMyState() {
   }
 }
 
-// ====================== WEBRTC (unchanged) ======================
+// ====================== WEBRTC ======================
 function setupWebRTC() {
   pc = new RTCPeerConnection({
     iceServers: [{urls: 'stun:stun.l.google.com:19302'}, {urls: 'stun:stun1.l.google.com:19302'}]
