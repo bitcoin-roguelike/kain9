@@ -11,7 +11,7 @@
   canvas { image-rendering:pixelated; border:8px solid #0f0; background:#001100; margin:10px auto; display:block; max-width:95vw; max-height:60vh; }
   button { font-size:28px; padding:12px 24px; margin:4px; background:#111; color:#0f0; border:4px solid #0f0; }
   #status, #seedDisplay { font-size:19px; margin:6px; min-height:28px; }
-  textarea { width:92%; height:65px; background:#001100; color:#0f0; font-family:monospace; font-size:15px; margin:6px auto; display:block; line-height:1.3; white-space:pre; overflow-x:auto; }
+  textarea { width:92%; height:85px; background:#001100; color:#0f0; font-family:monospace; font-size:15px; margin:6px auto; display:block; line-height:1.3; white-space:pre; overflow-x:auto; }
   .copybtn { font-size:18px; padding:6px 14px; margin:4px; }
   input { font-size:24px; padding:10px; background:#001100; color:#0f0; border:4px solid #0f0; width:70%; text-align:center; }
   .step { background:#001100; border:4px solid #0f0; padding:8px; margin:6px auto; max-width:520px; text-align:left; font-size:17px; }
@@ -26,7 +26,7 @@
   }
   #inventoryDisplay { font-size:18px; color:#ff0; margin:6px; }
 
-  /* ==================== PLAYFIELD ONLY (mobile fix) ==================== */
+  /* ==================== PLAYFIELD MOBILE FIX (unchanged) ==================== */
   #game { padding:8px; box-sizing:border-box; }
   .controls {
     display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin:15px auto; max-width:420px;
@@ -50,37 +50,37 @@
 <body>
 <h1>KAIN9 — 16×16</h1>
 
-<!-- NAME SCREEN (unchanged) -->
+<!-- NAME SCREEN (untouched) -->
 <div id="nameScreen">
   <h2>ENTER YOUR NAME</h2>
   <input id="playerName" type="text" value="Kain" maxlength="12"><br><br>
   <button onclick="setNameAndContinue()">CONTINUE TO ROLE</button>
 </div>
 
-<!-- ROLE CHOICE (unchanged) -->
+<!-- ROLE CHOICE (untouched) -->
 <div id="start" style="display:none">
   <button onclick="startRole('host')">I AM HOST (Orange H)</button><br><br>
   <button onclick="startRole('joiner')">I AM JOINER (Green J)</button>
 </div>
 
-<!-- SIGNALING (unchanged UI) -->
+<!-- SIGNALING (untouched UI) -->
 <div id="signaling" style="display:none; max-width:560px; margin:0 auto; padding:6px;">
   <div id="status">Kain9 • Generating SDP...</div>
 
   <div id="codeSection" class="step orange-box" style="display:none">
     <h3 id="codeTitle">YOUR CODE</h3>
     <textarea id="localSDP" readonly></textarea>
-    <button class="copybtn" onclick="copySDP()">📋 COPY CODE</button>
+    <button class="copybtn" onclick="copySDP()">📋 COPY @-BLOB</button>
   </div>
 
   <div id="pasteSection" class="step" style="display:none">
     <h3 id="pasteTitle">PASTE FRIEND'S CODE</h3>
     <button onclick="connect()">CONNECT</button><br>
-    <textarea id="remoteSDP" placeholder="Paste the K9- blob here..." spellcheck="false" autocorrect="off" autocapitalize="none"></textarea>
+    <textarea id="remoteSDP" placeholder="Paste the @-separated blob here..." spellcheck="false" autocorrect="off" autocapitalize="none"></textarea>
   </div>
 </div>
 
-<!-- GAME (only this section changed for mobile) -->
+<!-- GAME (mobile D-pad kept) -->
 <div id="game" style="display:none">
   <div id="seedDisplay">WORLD SAVE SEED: <span id="seedValue" style="color:#ff0"></span></div>
   <div id="status">CONNECTED • SLASH YOUR FRIEND</div>
@@ -94,7 +94,6 @@
   
   <canvas id="c" width="480" height="480"></canvas><br>
   
-  <!-- New clean D-pad layout for mobile -->
   <div class="controls">
     <button onclick="move(0,-1)">↑</button>
     <button onclick="move(-1,0)">←</button>
@@ -109,7 +108,7 @@
   <div id="battleLog"></div>
 </div>
 
-<!-- LOAD SEED OVERLAY (unchanged) -->
+<!-- LOAD SEED OVERLAY (untouched) -->
 <div id="loadSeedOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:100; padding-top:20vh;">
   <div style="max-width:520px; margin:0 auto; background:#001100; border:6px solid #0f0; padding:20px;">
     <h3>PASTE WORLD SAVE SEED</h3>
@@ -120,7 +119,7 @@
 </div>
 
 <script>
-// ====================== KAIN9 CORE (original logic kept) ======================
+// ====================== KAIN9 CORE ======================
 const SIZE = 16;
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -145,7 +144,7 @@ const FRAME_TIME = 1000 / TARGET_FPS;
 
 let battleMessages = [];
 
-// ====================== BROWSER LOCKDOWN ======================
+// ====================== LOCKDOWN ======================
 function lockdown() {
   document.addEventListener('gesturestart', e => e.preventDefault(), {passive:false});
   document.addEventListener('touchmove', e => {if(e.touches.length>1)e.preventDefault();}, {passive:false});
@@ -163,25 +162,18 @@ function battleLog(msg) {
   logEl.scrollTop = 0;
 }
 
-// ====================== BITCOIN-STYLE BLOB (no spaces, Messenger-proof) ======================
+// ====================== @-PROTECTED STUN SDP (Messenger-proof) ======================
 function encodeSDP(desc) {
   const json = JSON.stringify({type: desc.type, sdp: desc.sdp});
-  let b64 = btoa(json).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  let checksum = b64.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % 36;
-  const groups = (b64 + checksum.toString(36).toUpperCase()).match(/.{1,5}/g) || [];
-  return `K9-${groups.join('-')}`;
+  const b64 = btoa(json);
+  const spaced = b64.match(/.{1,40}/g).join(' ').trim();   // original STUN format
+  return spaced.split('').join('@');                       // @ between EVERY char
 }
 
 function decodeSDP(str) {
-  let clean = str.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); // nukes EVERYTHING Messenger does
-  if (clean.startsWith('K9')) clean = clean.slice(2);
-  const payload = clean.slice(0, -1);
-  const givenChk = clean.slice(-1);
-  let calc = payload.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % 36;
-  if (calc.toString(36).toUpperCase() !== givenChk) throw new Error('Bad checksum');
-  let b64 = payload.replace(/-/g,'+').replace(/_/g,'/');
-  while (b64.length % 4) b64 += '=';
-  return JSON.parse(atob(b64));
+  let clean = str.trim().replace(/@/g, '').replace(/\s+/g, ''); // strip @ + all whitespace
+  const json = atob(clean);
+  return JSON.parse(json);
 }
 
 // ====================== WORLD SEED (unchanged) ======================
@@ -192,8 +184,6 @@ function generateWorldSeed() {
   let sum = b64.split('').reduce((a,c)=>a + c.charCodeAt(0),0) % 36;
   return 'K9' + b64 + sum.toString(36).toUpperCase();
 }
-
-// copySeed / loadSeed functions remain EXACTLY the same as original...
 
 function copySeed() { navigator.clipboard.writeText(generateWorldSeed()).then(() => battleLog('WORLD SEED COPIED')); }
 function showLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'block'; }
@@ -218,10 +208,14 @@ function loadSeed() {
 }
 
 // ====================== WEBRTC ======================
-function setupWebRTC() { /* original */ 
-  pc = new RTCPeerConnection({ iceServers: [{urls: 'stun:stun.l.google.com:19302'}, {urls: 'stun:stun1.l.google.com:19302'}] });
+function setupWebRTC() {
+  pc = new RTCPeerConnection({
+    iceServers: [{urls: 'stun:stun.l.google.com:19302'}, {urls: 'stun:stun1.l.google.com:19302'}]
+  });
+
   pc.onicecandidate = e => { if (!e.candidate) finalizeSDP(); };
   pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') finalizeSDP(); };
+
   if (myRole === 'host') {
     dc = pc.createDataChannel('kain9');
     setupDataChannel(dc);
@@ -236,12 +230,10 @@ function finalizeSDP() {
   if (!pc || !pc.localDescription) return;
   const code = encodeSDP(pc.localDescription);
   document.getElementById('localSDP').value = code;
-  document.getElementById('status').innerHTML = `✅ Code blob ready — send to friend`;
+  document.getElementById('status').innerHTML = `✅ @-BLOB ready — send to friend`;
 }
 
-// (setupDataChannel, sendMsg, setNameAndContinue, startRole, gameLoop, move, slash, draw, keyboard — all unchanged)
-
-function setupDataChannel(channel) { /* original code */ 
+function setupDataChannel(channel) {
   channel.onopen = () => {
     document.getElementById('signaling').style.display = 'none';
     document.getElementById('game').style.display = 'block';
@@ -275,22 +267,26 @@ function sendMsg(obj) {
   if (dc && dc.readyState === 'open') dc.send(JSON.stringify(obj));
 }
 
-function setNameAndContinue() { /* original */ 
+// ====================== NAME & ROLE ======================
+function setNameAndContinue() {
   myName = document.getElementById('playerName').value.trim() || 'Kain';
   document.getElementById('nameScreen').style.display = 'none';
   document.getElementById('start').style.display = 'block';
 }
 
-async function startRole(role) { /* original */ 
+async function startRole(role) {
   myRole = role;
   myLetter = role === 'host' ? 'H' : 'J';
   myColor = role === 'host' ? '#ff8c00' : '#0f0';
   otherLetter = role === 'host' ? 'J' : 'H';
   otherColor = role === 'host' ? '#0f0' : '#ff8c00';
+
   myHealth = 10; otherHealth = 10; xp = 0; level = 1; inventory = [];
+
   document.getElementById('start').style.display = 'none';
   document.getElementById('signaling').style.display = 'block';
   document.getElementById('status').innerHTML = 'Kain9 • Generating SDP...';
+
   if (role === 'host') {
     document.getElementById('codeTitle').textContent = 'YOUR OFFER CODE';
     document.getElementById('codeSection').classList.add('orange-box');
@@ -303,11 +299,13 @@ async function startRole(role) { /* original */
     document.getElementById('pasteSection').classList.add('green-box');
     document.getElementById('pasteSection').style.display = 'block';
   }
+
   setupWebRTC();
   requestAnimationFrame(gameLoop);
 }
 
-function gameLoop(now) { /* original */ 
+// ====================== GAME LOOP & INPUT ======================
+function gameLoop(now) {
   if (!lastFrame) lastFrame = now;
   if (now - lastFrame >= FRAME_TIME) {
     tick++;
@@ -320,7 +318,7 @@ function gameLoop(now) { /* original */
 function copySDP() {
   const txt = document.getElementById('localSDP').value.trim();
   if (!txt) return battleLog('CODE STILL GENERATING');
-  navigator.clipboard.writeText(txt).then(() => battleLog('CODE BLOB COPIED'));
+  navigator.clipboard.writeText(txt).then(() => battleLog('@-BLOB COPIED'));
 }
 
 async function connect() {
@@ -330,6 +328,7 @@ async function connect() {
     const desc = decodeSDP(raw);
     const remoteType = myRole === 'host' ? 'answer' : 'offer';
     await pc.setRemoteDescription({type: remoteType, sdp: desc.sdp});
+
     if (myRole === 'joiner') {
       battleLog('HOST CODE OK — GENERATING ANSWER');
       const answer = await pc.createAnswer();
@@ -343,18 +342,18 @@ async function connect() {
       battleLog('CONNECTED!');
     }
   } catch (e) {
-    battleLog('BAD CODE — ' + (e.message || ''));
+    battleLog('BAD CODE');
   }
 }
 
-function move(dx, dy) { /* original */ 
+function move(dx, dy) {
   myPos.x = Math.max(0, Math.min(SIZE-1, myPos.x + dx));
   myPos.y = Math.max(0, Math.min(SIZE-1, myPos.y + dy));
   sendMsg({type: 'move', x: myPos.x, y: myPos.y});
   draw();
 }
 
-function slash() { /* original */ 
+function slash() {
   if (!otherPos || Math.abs(myPos.x - otherPos.x) > 1 || Math.abs(myPos.y - otherPos.y) > 1) return;
   sendMsg({type: 'slash'});
   otherHealth = Math.max(0, otherHealth - 2);
@@ -368,7 +367,7 @@ function slash() { /* original */
   draw();
 }
 
-function draw() { /* original */ 
+function draw() {
   ctx.fillStyle = '#001100';
   ctx.fillRect(0, 0, 480, 480);
   ctx.strokeStyle = '#003300';
@@ -399,7 +398,7 @@ function draw() { /* original */
     `TICK ${tick} | ME:(${myPos.x},${myPos.y}) | OTHER: ${otherPos ? `(${otherPos.x},${otherPos.y})` : '??'}`;
 }
 
-// Keyboard (unchanged)
+// Keyboard
 document.addEventListener('keydown', e => {
   if (!myRole) return;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') move(-1,0);
@@ -409,7 +408,7 @@ document.addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'Enter') slash();
 });
 
-// ====================== LIGHT PASTE CLEANING (seed only) ======================
+// Only clean seed field (SDP now handled only on Connect)
 window.onload = () => {
   const seedField = document.getElementById('loadSeedInput');
   seedField.addEventListener('paste', () => setTimeout(() => {
