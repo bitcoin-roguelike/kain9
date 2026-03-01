@@ -24,7 +24,6 @@
     background:#001100; border:3px solid #0f0; padding:8px; margin:10px auto; 
     width:92%; text-align:left; color:#0f0; 
   }
-  #inventoryDisplay { font-size:18px; color:#ff0; margin:8px; }
 </style>
 </head>
 <body>
@@ -71,8 +70,6 @@
     <span id="myInfo">YOU: Kain (HP 10/10)</span>  |  
     <span id="otherInfo">FRIEND: ??? (HP 10/10)</span>
   </div>
-
-  <div id="inventoryDisplay">BADGES: none</div>
   
   <canvas id="c" width="480" height="480"></canvas><br>
   
@@ -123,7 +120,7 @@ let lastFrame = 0;
 const TARGET_FPS = 30;
 const FRAME_TIME = 1000 / TARGET_FPS;
 
-// Battle log – newest on top
+// Battle log – newest on TOP (standard combat log style)
 let battleMessages = [];
 
 // ====================== BROWSER LOCKDOWN ======================
@@ -135,13 +132,13 @@ function lockdown() {
   if (screen.orientation?.lock) screen.orientation.lock('portrait').catch(()=>{});
 }
 
-// ====================== BATTLE LOG ======================
+// ====================== BATTLE LOG (newest at top) ======================
 function battleLog(msg) {
-  battleMessages.unshift(msg);
-  if (battleMessages.length > 10) battleMessages.pop();
+  battleMessages.unshift(msg);           // newest on top
+  if (battleMessages.length > 10) battleMessages.pop(); // remove oldest from bottom
   const logEl = document.getElementById('battleLog');
   logEl.innerHTML = battleMessages.join('<br>');
-  logEl.scrollTop = 0;
+  logEl.scrollTop = 0;                   // always show newest at top
 }
 
 // ====================== SIMPLE SDP ======================
@@ -229,18 +226,12 @@ function setupDataChannel(channel) {
     const msg = JSON.parse(e.data);
     if (msg.type === 'move') otherPos = msg;
     if (msg.type === 'name') otherName = msg.name;
-    if (msg.type === 'slash') {
-      myHealth = Math.max(0, myHealth - 2);
-      battleLog('YOU WERE SLASHED!');
-      if (myHealth <= 0) battleLog('YOU WERE DEFEATED!');
-      sendMsg({type: 'healthUpdate', health: myHealth});
-    }
+    if (msg.type === 'slash') { myHealth = Math.max(0, myHealth - 2); sendMsg({type: 'healthUpdate', health: myHealth}); }
     if (msg.type === 'healthUpdate') otherHealth = msg.health;
     if (msg.type === 'fullState') {
       otherName = msg.state.otherName || otherName;
       otherPos = msg.state.otherPos || otherPos;
       otherHealth = msg.state.otherHealth || otherHealth;
-      inventory = msg.state.inventory || inventory;
     }
     draw();
   };
@@ -344,19 +335,14 @@ function move(dx, dy) {
 }
 
 function slash() {
-  if (!otherPos || Math.abs(myPos.x - otherPos.x) > 1 || Math.abs(myPos.y - otherPos.y) > 1) {
-    return; // silent fail - no message
-  }
   sendMsg({type: 'slash'});
-  otherHealth = Math.max(0, otherHealth - 2);
-  battleLog('SLASH HIT!');
-  if (otherHealth <= 0) {
-    battleLog(`DEFEATED ${otherName}!`);
-    inventory.push({type: 'badge', name: otherName});
-    battleLog(`BADGE ACQUIRED: ${otherName}`);
+  if (otherPos && Math.abs(myPos.x - otherPos.x) <= 1 && Math.abs(myPos.y - otherPos.y) <= 1) {
+    otherHealth = Math.max(0, otherHealth - 2);
+    sendMsg({type: 'healthUpdate', health: otherHealth});
+    battleLog('SLASH HIT!');
+    if (otherHealth <= 0) battleLog('VICTORY! ENEMY DOWN');
+    draw();
   }
-  sendMsg({type: 'healthUpdate', health: otherHealth});
-  draw();
 }
 
 function draw() {
@@ -382,9 +368,6 @@ function draw() {
   document.getElementById('myInfo').textContent = `${myName} (HP ${myHealth}/10)`;
   document.getElementById('otherInfo').textContent = `${otherName} (HP ${otherHealth}/10)`;
   document.getElementById('seedValue').textContent = generateWorldSeed().slice(0,45)+'…';
-
-  const badges = inventory.filter(i => i.type === 'badge').map(i => i.name).join(', ') || 'none';
-  document.getElementById('inventoryDisplay').innerHTML = `BADGES: ${badges}`;
   
   document.getElementById('status').innerHTML = 
     `TICK ${tick} | ME:(${myPos.x},${myPos.y}) | OTHER: ${otherPos ? `(${otherPos.x},${otherPos.y})` : '??'}`;
@@ -402,3 +385,4 @@ document.addEventListener('keydown', e => {
 </script>
 </body>
 </html>
+
