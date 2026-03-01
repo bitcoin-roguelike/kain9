@@ -24,6 +24,7 @@
     background:#001100; border:3px solid #0f0; padding:8px; margin:10px auto; 
     width:92%; text-align:left; color:#0f0; 
   }
+  #inventoryDisplay { font-size:18px; color:#ff0; margin:8px; }
 </style>
 </head>
 <body>
@@ -70,6 +71,8 @@
     <span id="myInfo">YOU: Kain (HP 10/10)</span>  |  
     <span id="otherInfo">FRIEND: ??? (HP 10/10)</span>
   </div>
+
+  <div id="inventoryDisplay">BADGES: none</div>
   
   <canvas id="c" width="480" height="480"></canvas><br>
   
@@ -120,7 +123,7 @@ let lastFrame = 0;
 const TARGET_FPS = 30;
 const FRAME_TIME = 1000 / TARGET_FPS;
 
-// Battle log – newest on TOP (standard combat log style)
+// Battle log – newest on top
 let battleMessages = [];
 
 // ====================== BROWSER LOCKDOWN ======================
@@ -132,13 +135,13 @@ function lockdown() {
   if (screen.orientation?.lock) screen.orientation.lock('portrait').catch(()=>{});
 }
 
-// ====================== BATTLE LOG (newest at top) ======================
+// ====================== BATTLE LOG ======================
 function battleLog(msg) {
-  battleMessages.unshift(msg);           // newest on top
-  if (battleMessages.length > 10) battleMessages.pop(); // remove oldest from bottom
+  battleMessages.unshift(msg);
+  if (battleMessages.length > 10) battleMessages.pop();
   const logEl = document.getElementById('battleLog');
   logEl.innerHTML = battleMessages.join('<br>');
-  logEl.scrollTop = 0;                   // always show newest at top
+  logEl.scrollTop = 0;
 }
 
 // ====================== SIMPLE SDP ======================
@@ -153,11 +156,13 @@ function decodeSDP(str) {
   return JSON.parse(json);
 }
 
-// ====================== WORLD SAVE SEED (LIVE) ======================
+// ====================== WORLD SAVE SEED – EXACTLY 32 CHARS ======================
 function generateWorldSeed() {
-  const state = {myName, myPos, myHealth, otherName, otherPos, otherHealth, xp, level, inventory};
-  const b64 = btoa(JSON.stringify(state));
-  return 'K9SEED-' + b64.match(/.{1,30}/g).join('-');
+  const state = {x:myPos.x, y:myPos.y, mh:myHealth, oh:otherHealth, inv:inventory.map(i=>i.name).join('|')};
+  let b64 = btoa(JSON.stringify(state)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  b64 = b64.slice(0,28).padEnd(28,'0');
+  let sum = b64.split('').reduce((a,c)=>a + c.charCodeAt(0),0) % 36;
+  return 'K9' + b64 + sum.toString(36).toUpperCase(); // exactly 32 chars
 }
 
 function copySeed() {
@@ -170,18 +175,16 @@ function loadSeed() {
   hideLoadSeed();
   if (!input) return;
   try {
-    let clean = input.replace('K9SEED-', '').replace(/-/g, '');
-    const state = JSON.parse(atob(clean));
-    myName = state.myName || myName;
-    myPos = state.myPos || myPos;
-    myHealth = Math.max(0, state.myHealth || 10);
-    otherName = state.otherName || otherName;
-    otherPos = state.otherPos || otherPos;
-    otherHealth = Math.max(0, state.otherHealth || 10);
-    xp = state.xp || 0;
-    level = state.level || 1;
-    inventory = state.inventory || [];
-    if (dc && dc.readyState === 'open') sendMsg({type:'fullState', state});
+    let clean = input.replace('K9','').slice(0,29);
+    let sum = parseInt(clean.slice(-1),36);
+    let b64 = clean.slice(0,-1);
+    // checksum skip for simplicity (playground)
+    const state = JSON.parse(atob(b64.replace(/-/g,'+').replace(/_/g,'/').padEnd(28,'=')));
+    myPos = {x:state.x||8, y:state.y||8};
+    myHealth = Math.max(0, state.mh||10);
+    otherHealth = Math.max(0, state.oh||10);
+    inventory = (state.inv||'').split('|').filter(Boolean).map(name => ({type:'badge', name}));
+    if (dc && dc.readyState === 'open') sendMsg({type:'fullState', state:{myPos, myHealth, otherHealth, inventory}});
     battleLog('WORLD RESTORED');
     draw();
   } catch(e) { battleLog('BAD SEED'); }
@@ -226,12 +229,18 @@ function setupDataChannel(channel) {
     const msg = JSON.parse(e.data);
     if (msg.type === 'move') otherPos = msg;
     if (msg.type === 'name') otherName = msg.name;
-    if (msg.type === 'slash') { myHealth = Math.max(0, myHealth - 2); sendMsg({type: 'healthUpdate', health: myHealth}); }
+    if (msg.type === 'slash') {
+      myHealth = Math.max(0, myHealth - 2);
+      battleLog('YOU WERE SLASHED!');
+      if (myHealth <= 0) battleLog('YOU WERE DEFEATED!');
+      sendMsg({type: 'healthUpdate', health: myHealth});
+    }
     if (msg.type === 'healthUpdate') otherHealth = msg.health;
     if (msg.type === 'fullState') {
       otherName = msg.state.otherName || otherName;
       otherPos = msg.state.otherPos || otherPos;
       otherHealth = msg.state.otherHealth || otherHealth;
+      inventory = msg.state.inventory || inventory;
     }
     draw();
   };
@@ -335,14 +344,19 @@ function move(dx, dy) {
 }
 
 function slash() {
-  sendMsg({type: 'slash'});
-  if (otherPos && Math.abs(myPos.x - otherPos.x) <= 1 && Math.abs(myPos.y - otherPos.y) <= 1) {
-    otherHealth = Math.max(0, otherHealth - 2);
-    sendMsg({type: 'healthUpdate', health: otherHealth});
-    battleLog('SLASH HIT!');
-    if (otherHealth <= 0) battleLog('VICTORY! ENEMY DOWN');
-    draw();
+  if (!otherPos || Math.abs(myPos.x - otherPos.x) > 1 || Math.abs(myPos.y - otherPos.y) > 1) {
+    return; // completely silent – no message
   }
+  sendMsg({type: 'slash'});
+  otherHealth = Math.max(0, otherHealth - 2);
+  battleLog('SLASH HIT!');
+  if (otherHealth <= 0) {
+    battleLog(`DEFEATED ${otherName}!`);
+    inventory.push({type: 'badge', name: otherName});
+    battleLog(`BADGE ACQUIRED: ${otherName}`);
+  }
+  sendMsg({type: 'healthUpdate', health: otherHealth});
+  draw();
 }
 
 function draw() {
@@ -367,7 +381,10 @@ function draw() {
 
   document.getElementById('myInfo').textContent = `${myName} (HP ${myHealth}/10)`;
   document.getElementById('otherInfo').textContent = `${otherName} (HP ${otherHealth}/10)`;
-  document.getElementById('seedValue').textContent = generateWorldSeed().slice(0,45)+'…';
+  document.getElementById('seedValue').textContent = generateWorldSeed();
+
+  const badges = inventory.filter(i => i.type === 'badge').map(i => i.name).join(', ') || 'none';
+  document.getElementById('inventoryDisplay').innerHTML = `BADGES: ${badges}`;
   
   document.getElementById('status').innerHTML = 
     `TICK ${tick} | ME:(${myPos.x},${myPos.y}) | OTHER: ${otherPos ? `(${otherPos.x},${otherPos.y})` : '??'}`;
@@ -385,4 +402,3 @@ document.addEventListener('keydown', e => {
 </script>
 </body>
 </html>
-
