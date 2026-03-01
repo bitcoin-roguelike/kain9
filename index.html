@@ -11,10 +11,14 @@
   canvas { image-rendering:pixelated; border:8px solid #0f0; background:#001100; margin:10px auto; display:block; max-width:95vw; max-height:60vh; }
   button { font-size:28px; padding:14px 28px; margin:6px; background:#111; color:#0f0; border:4px solid #0f0; }
   #status, #seedDisplay { font-size:19px; margin:8px; min-height:32px; }
-  textarea { width:92%; height:180px; background:#001100; color:#0f0; border:4px solid #0f0; font-family:monospace; font-size:15px; margin:8px auto; display:block; line-height:1.4; }
+  textarea { width:92%; height:160px; background:#001100; color:#0f0; font-family:monospace; font-size:15px; margin:8px auto; display:block; line-height:1.4; }
   .copybtn { font-size:18px; padding:8px 16px; margin:4px; }
   input { font-size:24px; padding:10px; background:#001100; color:#0f0; border:4px solid #0f0; width:70%; text-align:center; }
-  .step { background:#001100; border:3px solid #0f0; padding:12px; margin:10px auto; max-width:520px; text-align:left; font-size:17px; }
+  .step { background:#001100; border:4px solid #0f0; padding:14px; margin:12px auto; max-width:520px; text-align:left; font-size:17px; }
+  .orange-box { border-color:#ff8c00 !important; }
+  .orange-box h3 { color:#ff8c00; }
+  .green-box { border-color:#0f0 !important; }
+  .green-box h3 { color:#0f0; }
 </style>
 </head>
 <body>
@@ -33,25 +37,24 @@
   <button onclick="startRole('joiner')">I AM JOINER (Green J)</button>
 </div>
 
-<!-- SIGNALING with super-clear steps -->
+<!-- SIGNALING – CLEAN LINEAR FLOW -->
 <div id="signaling" style="display:none; max-width:560px; margin:0 auto; padding:10px;">
   <div id="status">Kain9 • Generating SDP...</div>
-  
-  <div class="step" id="stepBox">
-    <strong>STEP 1:</strong> Copy your code below and send it to your friend (Discord, Telegram, voice call…)
+
+  <!-- HOST OFFER / JOINER ANSWER (both orange) -->
+  <div id="codeSection" class="step orange-box" style="display:none">
+    <h3 id="codeTitle">YOUR CODE</h3>
+    <textarea id="localSDP" readonly></textarea>
+    <button class="copybtn" onclick="copySDP()">📋 COPY CODE</button>
   </div>
-  
-  <h3 id="stepTitle">YOUR SDP CODE</h3>
-  <textarea id="localSDP" readonly></textarea>
-  <button class="copybtn" onclick="copySDP()">📋 COPY CODE</button><br><br>
-  
-  <div class="step" id="step2" style="display:none">
-    <strong>STEP 2:</strong> Paste your friend’s code here and tap CONNECT
+
+  <!-- JOINER PASTE HOST CODE (green) -->
+  <div id="pasteSection" class="step green-box" style="display:none">
+    <h3>PASTE HOST'S CODE</h3>
+    <textarea id="remoteSDP" placeholder="Paste the grouped code from your friend..."></textarea><br>
+    <button onclick="connect()">CONNECT</button>
   </div>
-  
-  <h3>Paste friend’s SDP CODE here:</h3>
-  <textarea id="remoteSDP" placeholder="Paste the grouped code here..."></textarea><br>
-  <button onclick="connect()">CONNECT</button>
+
 </div>
 
 <!-- GAME -->
@@ -135,18 +138,10 @@ function generateWorldSeed() {
 }
 
 function copySeed() {
-  const seed = generateWorldSeed();
-  navigator.clipboard.writeText(seed).then(() => alert('WORLD SEED COPIED — save this!'));
+  navigator.clipboard.writeText(generateWorldSeed()).then(() => alert('WORLD SEED COPIED — save this!'));
 }
-
-function showLoadSeed() {
-  document.getElementById('loadSeedOverlay').style.display = 'block';
-}
-
-function hideLoadSeed() {
-  document.getElementById('loadSeedOverlay').style.display = 'none';
-}
-
+function showLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'block'; }
+function hideLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'none'; }
 function loadSeed() {
   let input = document.getElementById('loadSeedInput').value.trim();
   hideLoadSeed();
@@ -167,20 +162,13 @@ function loadSeed() {
     if (dc && dc.readyState === 'open') sendMsg({type:'fullState', state});
     draw();
     alert('WORLD RESTORED!');
-  } catch(e) {
-    alert('Bad seed — check every character');
-  }
+  } catch(e) { alert('Bad seed — check every character'); }
 }
 
 // ====================== WEBRTC ======================
 function setupWebRTC() {
   pc = new RTCPeerConnection({
-    iceServers: [
-      {urls: 'stun:stun.l.google.com:19302'},
-      {urls: 'stun:stun1.l.google.com:19302'},
-      {urls: 'stun:stun2.l.google.com:19302'},
-      {urls: 'stun:stun3.l.google.com:19302'}
-    ]
+    iceServers: [{urls: 'stun:stun.l.google.com:19302'}, {urls: 'stun:stun1.l.google.com:19302'}]
   });
 
   pc.onicecandidate = e => { if (!e.candidate) finalizeSDP(); };
@@ -193,7 +181,6 @@ function setupWebRTC() {
   } else {
     pc.ondatachannel = e => { dc = e.channel; setupDataChannel(dc); };
   }
-  // single light poll (no abuse)
   setTimeout(finalizeSDP, 1800);
 }
 
@@ -201,7 +188,7 @@ function finalizeSDP() {
   if (!pc || !pc.localDescription) return;
   const code = encodeSDP(pc.localDescription);
   document.getElementById('localSDP').value = code;
-  document.getElementById('status').innerHTML = `✅ ${myRole.toUpperCase()} code ready — send to friend`;
+  document.getElementById('status').innerHTML = `✅ Code ready — send to friend`;
 }
 
 function setupDataChannel(channel) {
@@ -218,11 +205,7 @@ function setupDataChannel(channel) {
     const msg = JSON.parse(e.data);
     if (msg.type === 'move') otherPos = msg;
     if (msg.type === 'name') otherName = msg.name;
-    if (msg.type === 'slash') {
-      myHealth = Math.max(0, myHealth - 2);
-      if (myHealth <= 0) alert('YOU WERE SLASHED DOWN! DEFEAT!');
-      sendMsg({type: 'healthUpdate', health: myHealth});
-    }
+    if (msg.type === 'slash') { myHealth = Math.max(0, myHealth - 2); sendMsg({type: 'healthUpdate', health: myHealth}); }
     if (msg.type === 'healthUpdate') otherHealth = msg.health;
     if (msg.type === 'fullState') {
       otherName = msg.state.otherName || otherName;
@@ -247,22 +230,29 @@ function setNameAndContinue() {
 async function startRole(role) {
   myRole = role;
   myLetter = role === 'host' ? 'H' : 'J';
-  myColor = role === 'host' ? '#ff8c00' : '#0f0';          // HOST = orange, JOINER = green
+  myColor = role === 'host' ? '#ff8c00' : '#0f0';
   otherLetter = role === 'host' ? 'J' : 'H';
   otherColor = role === 'host' ? '#0f0' : '#ff8c00';
 
-  myHealth = 10;
-  otherHealth = 10;
-  xp = 0;
-  level = 1;
-  inventory = [];
+  myHealth = 10; otherHealth = 10; xp = 0; level = 1; inventory = [];
 
   document.getElementById('start').style.display = 'none';
   document.getElementById('signaling').style.display = 'block';
-  document.getElementById('localSDP').value = '';
   document.getElementById('status').innerHTML = 'Kain9 • Generating SDP...';
-  document.getElementById('stepTitle').textContent = role === 'host' ? 'YOUR SDP CODE (STEP 1)' : 'PASTE HOST CODE (STEP 1)';
-  document.getElementById('step2').style.display = 'none';
+
+  // Reset sections
+  document.getElementById('codeSection').style.display = 'none';
+  document.getElementById('pasteSection').style.display = 'none';
+
+  if (role === 'host') {
+    // Host flow: only orange offer box
+    document.getElementById('codeTitle').textContent = 'YOUR OFFER CODE';
+    document.getElementById('codeSection').classList.add('orange-box');
+    document.getElementById('codeSection').style.display = 'block';
+  } else {
+    // Joiner flow: first green paste box
+    document.getElementById('pasteSection').style.display = 'block';
+  }
 
   setupWebRTC();
   requestAnimationFrame(draw);
@@ -270,7 +260,7 @@ async function startRole(role) {
 
 function copySDP() {
   const txt = document.getElementById('localSDP').value;
-  if (!txt) return alert('Wait a moment — code is still generating');
+  if (!txt) return alert('Wait — code is still generating');
   navigator.clipboard.writeText(txt).then(() => {
     const b = document.querySelector('.copybtn');
     const old = b.textContent; b.textContent = '✅ COPIED';
@@ -280,30 +270,25 @@ function copySDP() {
 
 async function connect() {
   let input = document.getElementById('remoteSDP').value.trim();
-  if (!input) return alert('Paste the SDP code first');
+  if (!input) return alert('Paste the host code first');
 
   try {
     const desc = decodeSDP(input);
-    const type = myRole === 'host' ? 'answer' : 'offer';
-    await pc.setRemoteDescription({type, sdp: desc.sdp});
+    await pc.setRemoteDescription({type: 'offer', sdp: desc.sdp});
+    document.getElementById('status').innerHTML = 'Host code accepted — generating your answer...';
 
-    if (myRole === 'joiner') {
-      document.getElementById('status').innerHTML = 'Host code accepted — generating your answer...';
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      // give the browser a tiny moment to finalize the answer SDP
-      setTimeout(() => {
-        finalizeSDP();
-        document.getElementById('step2').style.display = 'block';
-        document.getElementById('stepTitle').textContent = 'YOUR ANSWER CODE — SEND BACK TO HOST';
-        document.getElementById('status').innerHTML = '✅ Answer ready — copy & send to host!';
-      }, 300);
-    } else {
-      document.getElementById('status').innerHTML = '✅ Connected!';
-    }
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    // Switch to answer view
+    document.getElementById('pasteSection').style.display = 'none';
+    document.getElementById('codeTitle').textContent = 'YOUR ANSWER CODE';
+    document.getElementById('codeSection').classList.add('orange-box');
+    document.getElementById('codeSection').style.display = 'block';
+    finalizeSDP();   // show the answer code immediately
+
   } catch (e) {
-    alert('Bad SDP code — double-check every character or ask friend to re-send');
-    console.error(e);
+    alert('Bad code — double-check every character');
   }
 }
 
@@ -347,14 +332,13 @@ function draw() {
 
   document.getElementById('myInfo').textContent = `${myName} (HP ${myHealth}/10)`;
   document.getElementById('otherInfo').textContent = `${otherName} (HP ${otherHealth}/10)`;
-  document.getElementById('seedValue').textContent = generateWorldSeed().slice(0, 45) + '…';
+  document.getElementById('seedValue').textContent = generateWorldSeed().slice(0,45)+'…';
   
   tick++;
   document.getElementById('status').innerHTML = 
     `TICK ${tick} | ME:(${myPos.x},${myPos.y}) | OTHER: ${otherPos ? `(${otherPos.x},${otherPos.y})` : '??'}`;
 }
 
-// Keyboard
 document.addEventListener('keydown', e => {
   if (!myRole) return;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') move(-1,0);
