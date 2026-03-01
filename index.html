@@ -171,7 +171,8 @@ function copySeed() {
 function showLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'block'; }
 function hideLoadSeed() { document.getElementById('loadSeedOverlay').style.display = 'none'; }
 function loadSeed() {
-  let input = document.getElementById('loadSeedInput').value.trim();
+  let raw = document.getElementById('loadSeedInput').value.trim();
+  let input = raw.replace(/\s+/g, ''); // remove ALL whitespace
   hideLoadSeed();
   if (!input) return;
   try {
@@ -307,7 +308,8 @@ function copySDP() {
 }
 
 async function connect() {
-  let input = document.getElementById('remoteSDP').value.trim();
+  let raw = document.getElementById('remoteSDP').value;
+  let input = raw.trim().replace(/\s+/g, ''); // ← AGGRESSIVE CLEANUP (all spaces, newlines, tabs removed)
   if (!input) return battleLog('PASTE CODE FIRST');
 
   try {
@@ -343,7 +345,7 @@ function move(dx, dy) {
 
 function slash() {
   if (!otherPos || Math.abs(myPos.x - otherPos.x) > 1 || Math.abs(myPos.y - otherPos.y) > 1) {
-    return; // silent
+    return; // completely silent
   }
   sendMsg({type: 'slash'});
   otherHealth = Math.max(0, otherHealth - 2);
